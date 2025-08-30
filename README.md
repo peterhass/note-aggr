@@ -20,6 +20,11 @@ source .env.sh
 ## Setup
 
 ```bash
+# Install dependencies (manjaro / arch)
+pamac install httpie jq go-yq
+```
+
+```bash
 # copy env template
 cp .env.sh .env.local.sh
 
@@ -28,6 +33,8 @@ nvim .env.local.sh
 ```
 
 ```bash
+source .env.sh
+
 mkdir ./documents
 
 # Explain what you're interested in
