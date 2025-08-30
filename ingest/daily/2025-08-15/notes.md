@@ -1,0 +1,11 @@
+- morning standup: team mentions slow loading on itinerary pages, maybe caching issue? check logs later
+- call with devops: server response spikes around 11am, maybe DB indexing problem
+- marketing wants new promo banner for Canada winter trips up by Friday, check assets
+- got feedback from support: some users complaining checkout button disappears on mobile safari
+- looked at new analytics dashboard, bounce rate on landing page higher than last week
+- lunch: brainstormed new idea for “package recommendations” based on past trips, could be interesting
+- UX team says booking flow for groups still confusing, need to test multi-passenger flow
+- tickets to review: #342, #348 (both high priority), #351 low priority
+- need to write summary for client call tomorrow, include highlights from yesterday's meeting
+- note to self: follow up on refunds issue from last week, maybe prepare small FAQ
+- random thought: could we use AI to suggest side trips based on user location & previous searches?

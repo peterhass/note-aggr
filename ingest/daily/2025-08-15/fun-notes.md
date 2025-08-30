@@ -1,0 +1,9 @@
+- morning standup: analytics dashboard charts sometimes show outdated data; investigate caching layer
+- call with product team: users report the booking flow freezes when selecting multiple passengers
+- devops: itinerary page response spikes during peak hours, may need database indexing
+- marketing: analytics dashboard should include a conversion funnel for seasonal campaigns
+- UX: booking flow progress indicator is unclear, some users abandon checkout
+- support feedback: itinerary page printing feature broken on Chrome
+- random thought: could we send personalized tips from analytics dashboard insights to users after booking
+- ticket #410: booking flow promo code input fails intermittently
+- meeting notes: discussed adding “recent searches” section to itinerary page for returning users

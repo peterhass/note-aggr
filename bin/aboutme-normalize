@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source $(dirname -- "${BASH_SOURCE[0]}")/env.sh
+
+print_error() { echo "$@" >&2; }
+
+input_file="${1:-}"
+if [[ -n "$input_file" && -f "$input_file" ]]; then
+  input="$(cat "$input_file")"
+else
+  input="$(cat -)"
+fi
+
+prompt="You are assisting a note-taking system.
+
+Your task is to normalize a free-form 'about me' document into a concise, structured description.
+The goal is to make it useful in future prompts, focusing on what this person does and what topics are relevant to them.
+
+Input text:
+$input
+
+Instructions:
+- Write in first person (I …).
+- Mention what the person does (profession, role, or activities).
+- Always include a 'My focus areas include:' section with 3–7 bullet points.
+- Focus areas can include interests, domains of expertise, or recurring themes the person wants notes about.
+- Ignore irrelevant hobbies unless directly tied to areas of focus.
+- Keep it short and clear, no extra commentary.
+
+Output only the normalized 'about me' text.
+"
+
+hash="$(echo "$input" | sha256sum | cut -d" " -f 1)"
+
+frontmatter=$(
+  file="$input_file" \
+  hash="$hash" \
+  yq -n '
+    .source.hash = strenv(hash) |
+    .source.path = strenv(file) 
+  '
+)
+
+echo "---"
+echo "$frontmatter"
+echo "---"
+echo ""
+echo "$prompt" | llm

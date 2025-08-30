@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source $(dirname -- "${BASH_SOURCE[0]}")/env.sh
+#set -x
+
+log() { echo -e "\033[1m$@\033[0m" >&2; }
+print_error() { echo "$@" >&2; }
+print_usage() {
+  echo "Usage: $0 --documents DOCUMENTS_DIR INGEST_DIR"
+  echo "  --documents DIR   Directory containing .md files to process"
+  echo "  INGEST_DIR        Target directory for processed notes"
+  echo ""
+  echo "Example: $0 --documents ./documents ingest/daily/2025-08-15"
+}
+
+process_note() {
+  local note_file="$1"
+  local ingest_dir="$2"
+  local note_basename="$(basename "$note_file")"
+  
+  log "Processing: $note_file" >&2
+  
+  # Call node-ingest and capture output
+  local processed_content
+  if ! processed_content="$(note-ingest "$note_file")"; then
+    print_error "Failed to process $note_file"
+    return 1
+  fi
+  
+  # Write output to ingest directory
+  local output_file="$documents_dir/$note_basename"
+  echo "$processed_content" > "$output_file"
+  
+  log "Wrote: $output_file"
+
+  echo "$output_file"
+}
+
+process_topics_in_note() {
+  local ingested_note="$1"
+
+  readarray -t topics < <( \
+    TOPICS=$(known_topics) note-lstopics \
+      --about-me "$documents_root/about-me.md" < "$ingested_note"
+  )
+
+  log "[$(basename "$ingested_note")]: process topics: ${topics[@]}"
+  for topic in "${topics[@]}"; do
+    process_topic_in_note "$ingested_note" "$topic" "${topics[@]}"
+  done
+}
+
+process_topic_in_note() {
+  local ingested_note="$1"
+  local topic="$2"
+
+  shift 2
+  local skip_topics=("$@")
+
+  log "[$(basename "$ingested_note")]: process topic: $topic"
+
+  local topic_doc_path="$documents_root/topics/$topic.md"
+
+  local topic_doc_content=""
+  if [[ -f "$topic_doc_path" ]]; then
+    topic_doc_content=$(cat "$topic_doc_path")
+  fi
+
+  #log "[$(basename "$ingested_note")]: [$topic] doc content: $topic_doc_content"
+
+  local generated_topic_doc=$(
+    # Build topicdoc-gen command with --topic and --skip-topic args
+    xargs \
+      -a <(
+        echo "--topic $topic"
+
+        # Watch out: $skip_topics might contain $topic, so it needs to
+        #   be ignored before building args for `topicdoc-gen`
+        for t in "${skip_topics[@]}"; do
+          if [[ "$t" != "$topic" ]]; then
+            echo "--skip-topic $t"
+          fi
+        done 
+      ) \
+      topicdoc-gen  < "$ingested_note"
+  )
+  log "[$(basename "$ingested_note")]: [$topic] generated: $generated_topic_doc"
+
+  # abusing xargs to trim whitespaces
+  if [[ -z "$(xargs <<< "$generated_topic_doc" )"]]; then
+    log "[$(basename "$ingested_note")]: [$topic] generated doc empty, not merging"
+    return 0
+  fi
+
+  topicdoc-merge --topic "$topic" \
+    <<< "$topic_doc_content" \
+    <<< "$generated_topic_doc" \
+    > "$topic_doc_path"
+
+  log "[$(basename "$ingested_note")]: wrote topic doc: $topic_doc_path"
+}
+
+known_topics() {
+  local topics_dir="$documents_root/topics"
+
+  find "$topics_dir" \
+    -type f \
+    -name "*.md" \
+    -exec basename {} .md \;
+}
+
+find_document_root() {
+  local current_dir="$documents_dir"
+
+  for ((i = 0; i < 5; i++)); do
+    if [[ -f "$current_dir/about-me.md" ]]; then
+      echo "$current_dir"
+      return 0
+    fi
+
+    current_dir=$(dirname "$current_dir")
+  done
+
+  return 1
+}
+
+# Parse arguments
+documents_dir=""
+ingest_dir=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --documents)
+      documents_dir="$2"
+      shift 2
+      ;;
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
+    *)
+      if [[ -z "$ingest_dir" ]]; then
+        ingest_dir="$1"
+        shift
+      else
+        print_error "Unknown argument: $1"
+        print_usage >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+# Validate arguments
+if [[ -z "$documents_dir" ]]; then
+  print_error "Missing --documents argument"
+  print_usage >&2
+  exit 1
+fi
+
+if [[ -z "$ingest_dir" ]]; then
+  print_error "Missing ingest directory argument"
+  print_usage >&2
+  exit 1
+fi
+
+if [[ ! -d "$documents_dir" ]]; then
+  print_error "Documents directory does not exist: $documents_dir"
+  exit 1
+fi
+
+documents_root=$(find_document_root || echo "")
+if [[ -z "$documents_root" ]]; then
+  print_error "Unable to find document root ('about-me.md' needs to be located in $documents_dir or one of the parent folders)"
+  exit 1
+fi
+
+# Find and process all .md files
+find "$ingest_dir" -name "*.md" -type f | while read -r note_file; do
+  ingested_note=$(process_note "$note_file" "$ingest_dir")
+  process_topics_in_note "$ingested_note"
+  exit 1
+done
+
+log "Processing complete"

@@ -1,0 +1,1 @@
+- We noticed that the bounce rate on analytics dashboard fully recovered to old, good levels

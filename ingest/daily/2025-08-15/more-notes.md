@@ -1,0 +1,8 @@
+- morning standup: users reported that the analytics dashboard sometimes fails to load metrics, especially for new campaigns
+- call with devops: server logs show slow response times when multiple users access the analytics dashboard at once
+- marketing request: need a new chart on the analytics dashboard showing weekly booking conversions
+- UX review: booking flow still confuses first-time users, drop-offs mostly at passenger info page
+- ticket #402: itinerary page images not displaying on Safari, might be related to lazy loading
+- lunch: brainstormed new idea for “recommended add-ons” in booking flow
+- feedback from support: some customers say itinerary page scroll jumps unexpectedly on mobile
+- random thought: maybe we can highlight top-performing destinations on the analytics dashboard homepage

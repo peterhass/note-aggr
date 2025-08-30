@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source $(dirname -- "${BASH_SOURCE[0]}")/env.sh
+
+echo "Called with $@" >&2
+
+topic=""
+skipped_topics=()
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --topic)
+      topic="$2"
+      shift 2
+      ;;
+    --skip-topic)
+      skipped_topics+=("$2")
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -z "$topic" ]]; then
+  echo "Usage: $0 --topic <topic-slug> --skip-topic <topic-slug> < note.md" >&2
+  exit 1
+fi
+
+note="$(cat -)"
+
+# Extract YAML frontmatter block (between first --- ... ---)
+header="$(echo "$note" | sed -n '/^---$/,/^---$/p' | sed '1d;$d')"
+
+# Parse fields with yq
+date="$(echo "$header" | yq -r '.date')"
+file="$(echo "$header" | yq -r '.source.path')"
+hash="$(echo "$header" | yq -r '.source.hash')"
+
+# Extract note content (strip frontmatter entirely)
+content="$(echo "$note" | sed -n '/^---$/,/^---$/!p')"
+
+# Prompt LLM for topic-specific knowledge
+prompt="You are an AI assistant helping to extract topic-specific knowledge from a note.
+
+### Instructions:
+1. Focus exclusively on the topic: **$topic**.
+2. Ignore and exclude any information related to the following topics: **${skipped_topics[@]}**.
+3. Extract only the relevant knowledge from the note content below.
+4. Format your response as a list of concise bullet points (1–3 sentences each).
+5. If no information relevant to the topic is found, respond with: **NULL**.
+6. Do not include any extra text, explanations, or commentary.
+
+### Note Content:
+$content
+
+### Output Format:
+- [Bullet point 1]
+- [Bullet point 2]
+- [Bullet point x]
+"
+
+# Send prompt to LLM and capture output
+llm_output="$(echo "$prompt" | llm)"
+
+# Trim whitespace
+llm_output_trimmed="$(echo "$llm_output" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+# Exit if LLM returns nothing or NULL
+if [[ -z "$llm_output_trimmed" || "$llm_output_trimmed" == "NULL" ]]; then
+  exit 1
+fi
+
+# Create frontmatter for topic knowledge
+frontmatter=$(
+  date="$date" \
+  file="$file" \
+  hash="$hash" \
+  topic="$topic" \
+  yq -n '
+    .topic = strenv(topic) |
+    .source.date = strenv(date) |
+    .source.path = strenv(file) |
+    .source.hash = strenv(hash)
+  '
+)
+
+# Output topic markdown
+echo "---"
+echo "$frontmatter"
+echo "---"
+echo ""
+echo "$llm_output"

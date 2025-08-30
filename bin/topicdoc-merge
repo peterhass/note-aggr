@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source $(dirname -- "${BASH_SOURCE[0]}")/env.sh
+
+# Parse command-line arguments
+topic_name=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --topic)
+      topic_name="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Ensure topic_name is provided
+if [[ -z "$topic_name" ]]; then
+    echo "Error: --topic argument is required." >&2
+    exit 1
+fi
+
+# Read all topic files from stdin
+input="$(cat)"
+
+# LLM prompt
+prompt="You are assisting a note-taker.
+
+Topic: $topic_name
+
+You are given multiple Markdown topic files with frontmatter. Each file contains notes and bullet points about this topic, with source.path and source.hash in the frontmatter.
+
+Your job is to merge them into a well-structured Markdown document.
+
+## Output requirements:
+1. Write the document like a wiki page: use headings, subheadings, paragraphs, and lists as appropriate.
+2. Retain *all facts* from the original notes. Do not invent information.
+3. Every fact must have a footnote immediately following it, in the format \`[^n]\`.
+4. At the end of the document, always include a section called \`## Footnotes\`.
+5. For each footnote, provide a reference to the original note's \`source.path\` and \`source.hash\`, exactly in this format:
+
+   \`\`\`markdown
+   [^1]: [<source.path>](<source.path>#<source.hash>)
+   \`\`\`
+
+6. Every \`[^n]\` in the text must have a corresponding entry in \`## Footnotes\`.  
+   Every entry in \`## Footnotes\` must be referenced at least once.  
+   The counts must match exactly.
+7. Use GitHub-flavored Markdown.
+8. Never use relative dates like 'next week' or 'previous week'. Always use absolute dates, e.g. \`2025-01-01\`, \`January 2025\`, \`week of 2025-01-01\`.
+
+Here are the topic files to merge:
+$input
+
+---
+Before returning your answer: Double-check that the number of footnote markers \`[^n]\` in the main text exactly matches the number of entries in the \`## Footnotes\` section.
+"
+
+# Send prompt to LLM
+echo "$prompt" | llm

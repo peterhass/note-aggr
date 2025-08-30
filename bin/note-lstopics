@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source $(dirname -- "${BASH_SOURCE[0]}")/env.sh
+
+print_error() { echo "$@" >&2; }
+print_usage() {
+  echo "Usage: $0 [--about-me FILE] [--topics FILE]"
+  echo "  --about-me FILE   About me document (or use ABOUT_ME env var)"
+  echo "  --topics FILE     Known topics list (or use TOPICS env var)"
+  echo ""
+  echo "Reads note from stdin, outputs relevant topics to stdout"
+}
+
+
+# Parse arguments
+about_me_file=""
+topics_file=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --about-me)
+      about_me_file="$2"
+      shift 2
+      ;;
+    --topics)
+      topics_file="$2"
+      shift 2
+      ;;
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
+    *)
+      print_error "Unknown option: $1"
+      print_usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Read about_me from arg or env
+if [[ -n "$about_me_file" && -f "$about_me_file" ]]; then
+  about_me="$(cat "$about_me_file")"
+elif [[ -n "${ABOUT_ME:-}" ]]; then
+  about_me="$ABOUT_ME"
+else
+  print_error "Please provide about_me file via --about-me or set ABOUT_ME env variable"
+  exit 1
+fi
+
+# Read existing topics from arg or env
+existing_topics=""
+if [[ -n "$topics_file" && -f "$topics_file" ]]; then
+  existing_topics="$(cat "$topics_file")"
+elif [[ -n "${TOPICS:-}" ]]; then
+  existing_topics="$TOPICS"
+fi
+
+# Read note from stdin
+note="$(cat -)"
+
+# Strip frontmatter if present
+content="$(echo "$note" | sed -n '/^---$/,/^---$/!p')"
+
+# TODO: change prompt so it selects topics in a smarter way, thinking about overlapping ones. overlapping topics lead to issues with topicdoc-gen later because it tries to skip related topics and ends up with nothing
+
+# Build prompt for LLM
+prompt="You are assisting a note-taker.
+
+About me:
+$about_me
+
+From the following note, extract the main topics relevant to my focus areas.
+
+Note:
+$content
+
+Instructions:
+- Focus only on topics relevant to my job description and focus areas
+- One topic per line
+- Topics should be short (1–4 words)
+- Output topics in slug format, separate words with underscore
+- Prefer reusing existing topics when applicable"
+
+# Add existing topics to prompt if available
+if [[ -n "$existing_topics" ]]; then
+  prompt="$prompt
+- Existing topics to reuse when possible:
+$existing_topics"
+fi
+
+prompt="$prompt
+- Do not output anything except the topics list
+"
+
+# Send prompt to LLM (provider-independent)
+echo "$prompt" | llm

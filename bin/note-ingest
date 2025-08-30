@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source $(dirname -- "${BASH_SOURCE[0]}")/env.sh
+
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <markdown-file>"
+  exit 1
+fi
+
+file="$1"
+
+if [ ! -f "$file" ]; then
+  echo "Error: file '$file' not found" >&2
+  exit 1
+fi
+
+content="$(cat "$file")"
+hash="$(echo "$content" | sha256sum | cut -d" " -f 1)"
+date="$(stat -c %y "$file" | cut -d' ' -f1)"
+
+# TODO: detect type here?
+
+frontmatter=$(
+  date="$date" \
+  file="$file" \
+  hash="$hash" \
+  yq -n '
+    .date = strenv(date) |
+    .source.path = strenv(file) |
+    .source.hash = strenv(hash)
+  '
+)
+
+echo "---"
+echo "$frontmatter"
+echo "---"
+echo ""
+echo "$content"
