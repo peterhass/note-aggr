@@ -22,7 +22,7 @@ llm_assert() {
     $assertion
 
     # User Input
-    $topics
+    $user_input
 EOF
   )
 
@@ -34,11 +34,27 @@ EOF
       return 0
       ;;
     "FALSE")
-      failure_log "[${FUNCNAME[1]}]" "Failed assertion for input '$user_input'"
+      failure_log "[${FUNCNAME[1]}]" "Failed assertion"
+      failure_log
+      failure_log "Assertion:"
+      failure_log "$assertion"
+      failure_log
+      failure_log "User Input:"
+      failure_log "$user_input"
+
       exit 1
       ;;
     *)
-      failure_log "[${FUNCNAME[1]}]" "Failed assertion for input '$user_input'. Unrecognized LLM response: $trimmed_response"
+      failure_log "[${FUNCNAME[1]}]" "Failed assertion"
+      failure_log
+      failure_log "Assertion:"
+      failure_log "$assertion"
+      failure_log
+      failure_log "User Input:"
+      failure_log "$user_input"
+      failure_log
+      failure_log "Response:"
+      failure_log "$trimmed_response"
       exit 1
       ;;
   esac
@@ -55,7 +71,7 @@ test_about_me() {
   - team building
   - team processes
   "
-  topics=$(note-lstopics <<-EOF
+  local topics=$(note-lstopics <<-EOF
   - morning standup: team mentions slow loading on itinerary pages, maybe caching issue? check logs later
   - call with devops: server response spikes around 11am, maybe DB indexing problem
   - marketing wants new promo banner for Canada winter trips up by Friday, check assets
@@ -74,5 +90,55 @@ EOF
 EOF
 }
 
+test_existing_topics_env() {
+  log "[$FUNCNAME] Checking topic matching according to \$TOPICS"
+
+  export ABOUT_ME="
+  I am a Software Developer at FancyTravel GmbH. My focus areas include:
+  *   Product knowledge
+  *   Technical details
+  *   Software design & architecture
+  *   Stakeholder information
+  "
+  export TOPICS="
+  itinerary
+  infrastructure
+  marketing
+  analytics
+  checkout
+  checkout_bugs
+  vision
+  "
+  
+  local topics=$(note-lstopics <<-EOF
+  - morning standup: team mentions slow loading on itinerary pages, maybe caching issue? check logs later
+  - call with devops: server response spikes around 11am, maybe DB indexing problem
+  - marketing wants new promo banner for Canada winter trips up by Friday, check assets
+  - got feedback from support: some users complaining checkout button disappears on mobile safari
+  - looked at new analytics dashboard, bounce rate on landing page higher than last week
+  - Marty complained about still waiting for others to review his PRs
+  - Support reported some users were not able to login with older chrome versions. Problem needs to be investigated.
+EOF
+  )
+
+  # TODO: Assertion fails from time to time because of bad prompt in note-lstopics.
+  #   Gemini sometimes puts performance issues under infrastructure and sometimes
+  #   creates seperate (very granular) topics 
+  llm_assert "$topics" <<-EOF
+  Given user input contains the following topics:
+  - itinerary
+  - infrastructure
+  - marketing
+  - analytics
+  - checkout_bugs
+
+  All other topics MUST not mention anything related to the following topics:
+  - checkout (without prefix)
+  - anything performance related
+  - promo banner
+  - mobile safari
+EOF
+}
 
 test_about_me
+test_existing_topics_env
