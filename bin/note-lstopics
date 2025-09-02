@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source $(dirname -- "${BASH_SOURCE[0]}")/env.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/env.sh"
 
 print_error() { echo "$@" >&2; }
 print_usage() {
@@ -11,6 +11,10 @@ print_usage() {
   echo "Reads note from stdin, outputs relevant topics to stdout"
 }
 
+strip_frontmatter() {
+  local content="$1"
+  sed -n '/^---$/,/^---$/!p' <<< "$content"
+}
 
 # Parse arguments
 about_me_file=""
@@ -47,6 +51,7 @@ else
   print_error "Please provide about_me file via --about-me or set ABOUT_ME env variable"
   exit 1
 fi
+about_me="$(strip_frontmatter "$about_me")"
 
 # Read existing topics from arg or env
 existing_topics=""
@@ -60,38 +65,35 @@ fi
 note="$(cat -)"
 
 # Strip frontmatter if present
-content="$(echo "$note" | sed -n '/^---$/,/^---$/!p')"
+content="$(strip_frontmatter "$note")"
 
 # TODO: change prompt so it selects topics in a smarter way, thinking about overlapping ones. overlapping topics lead to issues with topicdoc-gen later because it tries to skip related topics and ends up with nothing
-
-# Build prompt for LLM
-prompt="You are assisting a note-taker.
-
-About me:
-$about_me
+prompt="$({
+  echo "
+You are assisting a note-taker.
 
 From the following note, extract the main topics relevant to my focus areas.
-
-Note:
-$content
 
 Instructions:
 - Focus only on topics relevant to my job description and focus areas
 - One topic per line
 - Topics should be short (1–4 words)
 - Output topics in slug format, separate words with underscore
-- Prefer reusing existing topics when applicable"
+- Prefer reusing existing topics when applicable.
 
-# Add existing topics to prompt if available
-if [[ -n "$existing_topics" ]]; then
-  prompt="$prompt
-- Existing topics to reuse when possible:
-$existing_topics"
-fi
+# About Me
+$about_me
 
-prompt="$prompt
-- Do not output anything except the topics list
-"
+# Existing topics
+${existing_topics:-(no topics exist)}
+
+# Note
+
+\`\`\`
+$(md-escape-for-code <<< "$content")
+\`\`\`
+  "
+})"
 
 # Send prompt to LLM (provider-independent)
 echo "$prompt" | llm

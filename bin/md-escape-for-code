@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# md-normalize-fences (sed version)
+# Convert any run of 3+ backticks to the same-length run of tildes.
+
+source $(dirname -- "${BASH_SOURCE[0]}")/env.sh
+sed -E ':a s/```+/~~~+/g; ta'
